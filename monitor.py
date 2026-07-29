@@ -3,11 +3,13 @@ import json
 import re
 import yaml
 import requests
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
 
 STATE_FILE = Path("state.json")
 CONFIG_FILE = Path("config.yaml")
+HKT = timezone(timedelta(hours=8))
 
 def load_config():
     with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -23,6 +25,9 @@ def save_state(state):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
 
+def now_hkt():
+    return datetime.now(HKT).strftime("%Y-%m-%d %H:%M:%S")
+
 def send_telegram(token: str, chat_id: str, message: str):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
@@ -34,45 +39,53 @@ def send_telegram(token: str, chat_id: str, message: str):
     try:
         resp = requests.post(url, json=payload, timeout=10)
         print(f"Telegram 回應: {resp.status_code}")
+        return resp.status_code == 200
     except Exception as e:
         print(f"Telegram 發送失敗: {e}")
+        return False
 
 def check_target(page, target):
     method = target.get("method", "text").lower()
-    value = target["value"]
+    value = target.get("value", "")
+    must_have = target.get("must_have", [])
+    must_not_have = target.get("must_not_have", [])
 
     try:
+        content = page.content()
+
+        # 基本檢測
         if method == "text":
-            content = page.content()
-            found = value in content
-            print(f"  → 頁面內容長度: {len(content)} 字元")
-            print(f"  → 有冇搵到「{value}」: {found}")
-            return "FOUND" if found else "LOST"
-
+            base_found = value in content if value else True
         elif method == "css":
-            locator = page.locator(value)
-            count = locator.count()
-            found = count > 0
-            print(f"  → CSS 找到 {count} 個元素")
-            return "FOUND" if found else "LOST"
-
+            base_found = page.locator(value).count() > 0
         elif method == "xpath":
-            locator = page.locator(f"xpath={value}")
-            count = locator.count()
-            found = count > 0
-            print(f"  → XPath 找到 {count} 個元素")
-            return "FOUND" if found else "LOST"
-
+            base_found = page.locator(f"xpath={value}").count() > 0
         elif method == "regex":
-            content = page.content()
-            found = bool(re.search(value, content, re.IGNORECASE | re.DOTALL))
-            print(f"  → Regex 結果: {found}")
-            return "FOUND" if found else "LOST"
+            base_found = bool(re.search(value, content, re.IGNORECASE | re.DOTALL))
+        else:
+            base_found = False
 
-        return "ERROR"
+        if not base_found:
+            print(f"  → 基本條件唔符合")
+            return "LOST"
+
+        # must_have 檢查
+        for kw in must_have:
+            if kw not in content:
+                print(f"  → 缺少必須字眼: {kw}")
+                return "LOST"
+
+        # must_not_have 檢查
+        for kw in must_not_have:
+            if kw in content:
+                print(f"  → 出現禁止字眼: {kw}")
+                return "LOST"
+
+        print(f"  → 所有條件通過 → FOUND")
+        return "FOUND"
 
     except Exception as e:
-        print(f"  → 檢查時出錯: {e}")
+        print(f"  → 檢查出錯: {e}")
         return "ERROR"
 
 def main():
@@ -80,11 +93,14 @@ def main():
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 
     if not token or not chat_id:
-        raise ValueError("缺少 TELEGRAM_BOT_TOKEN 或 TELEGRAM_CHAT_ID")
+        raise ValueError("缺少 TELEGRAM secrets")
 
     config = load_config()
     settings = config.get("settings", {})
     targets = config.get("targets", [])
+    only_notify_found = settings.get("only_notify_found", True)
+    failure_threshold = settings.get("failure_threshold", 3)
+
     state = load_state()
     changed = False
 
@@ -103,49 +119,67 @@ def main():
             name = target.get("name", tid)
             url = target["url"]
 
-            print(f"正在檢查: {name}")
+            # 初始化 state
+            if tid not in state:
+                state[tid] = {"status": "LOST", "failures": 0}
+
+            print(f"\n正在檢查: {name}")
             print(f"網址: {url}")
 
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page.wait_for_timeout(3000)
-
-                # 嘗試向下滾動，觸發懶加載
+                page.wait_for_timeout(settings.get("wait_after_load", 3000))
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(2000)
 
                 current_status = check_target(page, target)
-                print(f"  → 判斷結果: {current_status}")
-
             except Exception as e:
-                print(f"  → 載入頁面失敗: {e}")
+                print(f"  → 載入失敗: {e}")
                 current_status = "ERROR"
 
-            previous = state.get(tid, "LOST")
-            print(f"  → 上次狀態: {previous}")
+            prev_status = state[tid].get("status", "LOST")
+            failures = state[tid].get("failures", 0)
 
-            if current_status in ("FOUND", "LOST") and current_status != previous:
-                state[tid] = current_status
+            print(f"  → 上次狀態: {prev_status} | 今次: {current_status}")
+
+            # 處理失敗計數
+            if current_status == "ERROR":
+                failures += 1
+                state[tid]["failures"] = failures
                 changed = True
 
-                if current_status == "FOUND":
+                if failures == failure_threshold:
                     msg = (
-                        f"<b>有貨通知！</b>\n\n"
+                        f"<b>⚠️ 檢查異常通知</b>\n\n"
                         f"商品：<b>{name}</b>\n"
-                        f"狀態：FOUND\n"
+                        f"已連續失敗 <b>{failures}</b> 次\n"
+                        f"時間：{now_hkt()}\n"
                         f"連結：{url}"
                     )
                     send_telegram(token, chat_id, msg)
-                    print(f"→ 已發送有貨通知")
+                    print("→ 已發送連續失敗通知")
+            else:
+                # 成功檢查，重置失敗次數
+                if failures > 0:
+                    state[tid]["failures"] = 0
+                    changed = True
 
-                elif current_status == "LOST":
-                    msg = (
-                        f"<b>已經冇貨</b>\n\n"
-                        f"商品：<b>{name}</b>\n"
-                        f"連結：{url}"
-                    )
-                    send_telegram(token, chat_id, msg)
-                    print(f"→ 已發送冇貨通知")
+                # 狀態有變化
+                if current_status != prev_status:
+                    state[tid]["status"] = current_status
+                    changed = True
+
+                    # 只在變成 FOUND 時通知
+                    if current_status == "FOUND" and only_notify_found:
+                        msg = (
+                            f"<b>有貨通知！</b>\n\n"
+                            f"商品：<b>{name}</b>\n"
+                            f"狀態：<b>FOUND</b>\n"
+                            f"時間：{now_hkt()}\n"
+                            f"連結：{url}"
+                        )
+                        send_telegram(token, chat_id, msg)
+                        print("→ 已發送有貨通知")
 
         browser.close()
 
@@ -157,7 +191,7 @@ def main():
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
             f.write("changed=false\n")
 
-    print("監控完成")
+    print("\n監控完成")
 
 if __name__ == "__main__":
     main()
