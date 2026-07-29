@@ -38,7 +38,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python monitor.py
-
+        
       - name: Commit state if changed
         if: steps.monitor.outputs.changed == 'true'
         run: |
@@ -49,5 +49,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: update monitor state [skip ci]"
+            git pull --rebase origin main || true
             git push
           fi
