@@ -52,12 +52,10 @@ def check_target(page, target, content=None):
 
     try:
         if method == "requests":
-            # 直接用傳入的 content
             if content is None:
                 return "ERROR"
             base_found = value in content if value else True
         else:
-            # 原本 Playwright 方式
             if content is None:
                 content = page.content()
             if method == "text":
@@ -129,7 +127,7 @@ def main():
             print(f"\n正在檢查: {name}")
             print(f"網址: {url}")
 
-                       try:
+            try:
                 if target.get("method") == "requests":
                     print("  → 使用 requests 方式")
                     headers = {
