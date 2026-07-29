@@ -126,9 +126,29 @@ def main():
             print(f"\n正在檢查: {name}")
             print(f"網址: {url}")
 
-            try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page.wait_for_timeout(settings.get("wait_after_load", 3000))
+                    try:
+                page.goto(url, wait_until="networkidle", timeout=45000)
+
+                # 通用等待邏輯
+                wait_for = target.get("wait_for")
+                wait_for_selector = target.get("wait_for_selector")
+
+                if wait_for:
+                    try:
+                        page.wait_for_selector(f"text={wait_for}", timeout=12000)
+                        print(f"  → 已等到文字「{wait_for}」")
+                    except Exception:
+                        print(f"  → 等待文字「{wait_for}」超時")
+                elif wait_for_selector:
+                    try:
+                        page.wait_for_selector(wait_for_selector, timeout=12000)
+                        print(f"  → 已等到 selector「{wait_for_selector}」")
+                    except Exception:
+                        print(f"  → 等待 selector 超時")
+                else:
+                    page.wait_for_timeout(settings.get("wait_after_load", 3000))
+
+                # 滾動觸發懶加載
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(2000)
 
