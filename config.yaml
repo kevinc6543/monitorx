@@ -1,9 +1,9 @@
 settings:
   headless: true
-  timeout: 30000
+  timeout: 45000
   wait_after_load: 3000
-  failure_threshold: 3          # 連續失敗幾次先通知
-  only_notify_found: true       # 只通知有貨
+  failure_threshold: 3
+  only_notify_found: true
 
 targets:
   - id: hells_nether_deck
@@ -11,9 +11,8 @@ targets:
     url: "https://lastchancetoy.com/collections/beybladex"
     method: "text"
     value: "UX-21"
-    # 加強條件（可選）
-    must_have:                  # 必須同時出現這些字
-      - ""
-    must_not_have:              # 出現這些字就當冇貨
-      - ""
-      - ""
+    must_have:
+      - "UX-21"
+    must_not_have:
+      - "售完"
+      - "售罄"
