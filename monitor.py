@@ -126,7 +126,7 @@ def main():
             print(f"\n正在檢查: {name}")
             print(f"網址: {url}")
 
-                    try:
+            try:
                 page.goto(url, wait_until="networkidle", timeout=45000)
 
                 # 通用等待邏輯
@@ -153,6 +153,7 @@ def main():
                 page.wait_for_timeout(2000)
 
                 current_status = check_target(page, target)
+
             except Exception as e:
                 print(f"  → 載入失敗: {e}")
                 current_status = "ERROR"
@@ -200,8 +201,6 @@ def main():
                         )
                         send_telegram(token, chat_id, msg)
                         print("→ 已發送有貨通知")
-
-        browser.close()
 
     if changed:
         save_state(state)
