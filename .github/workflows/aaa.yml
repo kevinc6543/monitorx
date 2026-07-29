@@ -2,11 +2,14 @@ name: AAA
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
 
     steps:
-      - run: echo hello
+      - run: |
+          echo "event=${{ github.event_name }}"
+          date
