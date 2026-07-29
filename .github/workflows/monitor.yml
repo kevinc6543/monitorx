@@ -1,9 +1,8 @@
-# auto schedule enabled
 name: Product Monitor
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -12,6 +11,8 @@ concurrency:
 
 permissions:
   contents: write
+
+jobs:
 
 jobs:
   monitor:
