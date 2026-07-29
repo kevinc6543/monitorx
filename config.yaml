@@ -9,10 +9,10 @@ targets:
   - id: hells_nether_deck
     name: "Hells Nether Deck Set"
     url: "https://lastchancetoy.com/collections/beybladex"
-    method: "text"
+    method: "requests"
     value: "UX-21"
-    must_have:
-      - "UX-21"
-    must_not_have:
-      - "售完"
-      - "售罄"
+    #must_have:
+    # - "UX-21"
+    #must_not_have:
+      #- "售完"
+      #- "售罄"
