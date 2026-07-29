@@ -54,6 +54,9 @@ def check_target(page, target):
         content = page.content()
 
         if method == "text":
+            print(f"  → 頁面標題: {page.title()}")
+            print(f"  → 內容長度: {len(content)}")
+            print(f"  → 內容前500字: {content[:500]}")
             base_found = value in content if value else True
         elif method == "css":
             base_found = page.locator(value).count() > 0
