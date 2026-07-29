@@ -53,7 +53,6 @@ def check_target(page, target):
     try:
         content = page.content()
 
-        # 基本檢測
         if method == "text":
             base_found = value in content if value else True
         elif method == "css":
@@ -69,13 +68,11 @@ def check_target(page, target):
             print(f"  → 基本條件唔符合")
             return "LOST"
 
-        # must_have 檢查
         for kw in must_have:
             if kw not in content:
                 print(f"  → 缺少必須字眼: {kw}")
                 return "LOST"
 
-        # must_not_have 檢查
         for kw in must_not_have:
             if kw in content:
                 print(f"  → 出現禁止字眼: {kw}")
@@ -112,14 +109,13 @@ def main():
             locale="zh-HK"
         )
         page = context.new_page()
-        page.set_default_timeout(settings.get("timeout", 30000))
+        page.set_default_timeout(settings.get("timeout", 45000))
 
         for target in targets:
             tid = target["id"]
             name = target.get("name", tid)
             url = target["url"]
 
-            # 初始化 state
             if tid not in state:
                 state[tid] = {"status": "LOST", "failures": 0}
 
@@ -129,7 +125,6 @@ def main():
             try:
                 page.goto(url, wait_until="networkidle", timeout=45000)
 
-                # 通用等待邏輯
                 wait_for = target.get("wait_for")
                 wait_for_selector = target.get("wait_for_selector")
 
@@ -148,7 +143,6 @@ def main():
                 else:
                     page.wait_for_timeout(settings.get("wait_after_load", 3000))
 
-                # 滾動觸發懶加載
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(2000)
 
@@ -163,7 +157,6 @@ def main():
 
             print(f"  → 上次狀態: {prev_status} | 今次: {current_status}")
 
-            # 處理失敗計數
             if current_status == "ERROR":
                 failures += 1
                 state[tid]["failures"] = failures
@@ -180,17 +173,14 @@ def main():
                     send_telegram(token, chat_id, msg)
                     print("→ 已發送連續失敗通知")
             else:
-                # 成功檢查，重置失敗次數
                 if failures > 0:
                     state[tid]["failures"] = 0
                     changed = True
 
-                # 狀態有變化
                 if current_status != prev_status:
                     state[tid]["status"] = current_status
                     changed = True
 
-                    # 只在變成 FOUND 時通知
                     if current_status == "FOUND" and only_notify_found:
                         msg = (
                             f"<b>有貨通知！</b>\n\n"
@@ -201,6 +191,8 @@ def main():
                         )
                         send_telegram(token, chat_id, msg)
                         print("→ 已發送有貨通知")
+
+        browser.close()
 
     if changed:
         save_state(state)
