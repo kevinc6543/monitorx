@@ -6,11 +6,11 @@ settings:
   only_notify_found: true
 
 targets:
-  - id: hells_nether_deck
-    name: "Hells Nether Deck Set"
+  - id: CX_11
+    name: "帝皇霸權3陀螺套裝"
     url: "https://lastchancetoy.com/collections/beybladex"
     method: "requests"
-    value: "UX-21"
+    value: "CX-11"
     #must_have:
     # - "UX-21"
     #must_not_have:
