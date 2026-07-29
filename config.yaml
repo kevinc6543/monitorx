@@ -1,0 +1,21 @@
+# 全局設定
+settings:
+  headless: true
+  timeout: 20000          # 頁面載入超時（毫秒）
+  wait_after_load: 1500   # 載入後再等一陣（有啲網站要 JS 渲染）
+
+targets:
+  - id: example_1
+    name: "示例商品名稱"
+    url: "https://www.toyrcus.com/products/xxxxx"
+    method: "text"                    # 可選: text / css / xpath / regex
+    value: "商品完整名稱"              # 要搵嘅商品名
+    # 可選：額外確認有貨字眼（更準）
+    # in_stock_keywords: ["加入購物車", "Add to Cart", "現貨"]
+
+  # 可以繼續加多個
+  # - id: example_2
+  #   name: "另一件商品"
+  #   url: "https://..."
+  #   method: "css"
+  #   value: ".product-title"
