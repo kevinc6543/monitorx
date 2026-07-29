@@ -44,28 +44,32 @@ def send_telegram(token: str, chat_id: str, message: str):
         print(f"Telegram 發送失敗: {e}")
         return False
 
-def check_target(page, target):
+def check_target(page, target, content=None):
     method = target.get("method", "text").lower()
     value = target.get("value", "")
     must_have = target.get("must_have", [])
     must_not_have = target.get("must_not_have", [])
 
     try:
-        content = page.content()
-
-        if method == "text":
-            print(f"  → 頁面標題: {page.title()}")
-            print(f"  → 內容長度: {len(content)}")
-            print(f"  → 內容前500字: {content[:500]}")
+        if method == "requests":
+            # 直接用傳入的 content
+            if content is None:
+                return "ERROR"
             base_found = value in content if value else True
-        elif method == "css":
-            base_found = page.locator(value).count() > 0
-        elif method == "xpath":
-            base_found = page.locator(f"xpath={value}").count() > 0
-        elif method == "regex":
-            base_found = bool(re.search(value, content, re.IGNORECASE | re.DOTALL))
         else:
-            base_found = False
+            # 原本 Playwright 方式
+            if content is None:
+                content = page.content()
+            if method == "text":
+                base_found = value in content if value else True
+            elif method == "css":
+                base_found = page.locator(value).count() > 0
+            elif method == "xpath":
+                base_found = page.locator(f"xpath={value}").count() > 0
+            elif method == "regex":
+                base_found = bool(re.search(value, content, re.IGNORECASE | re.DOTALL))
+            else:
+                base_found = False
 
         if not base_found:
             print(f"  → 基本條件唔符合")
@@ -125,31 +129,43 @@ def main():
             print(f"\n正在檢查: {name}")
             print(f"網址: {url}")
 
-            try:
-                page.goto(url, wait_until="networkidle", timeout=45000)
-
-                wait_for = target.get("wait_for")
-                wait_for_selector = target.get("wait_for_selector")
-
-                if wait_for:
-                    try:
-                        page.wait_for_selector(f"text={wait_for}", timeout=12000)
-                        print(f"  → 已等到文字「{wait_for}」")
-                    except Exception:
-                        print(f"  → 等待文字「{wait_for}」超時")
-                elif wait_for_selector:
-                    try:
-                        page.wait_for_selector(wait_for_selector, timeout=12000)
-                        print(f"  → 已等到 selector「{wait_for_selector}」")
-                    except Exception:
-                        print(f"  → 等待 selector 超時")
+                       try:
+                if target.get("method") == "requests":
+                    print("  → 使用 requests 方式")
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                        "Accept-Language": "zh-HK,zh;q=0.9,en;q=0.8"
+                    }
+                    resp = requests.get(url, headers=headers, timeout=30)
+                    resp.raise_for_status()
+                    content = resp.text
+                    print(f"  → 取得內容長度: {len(content)}")
+                    current_status = check_target(None, target, content=content)
                 else:
-                    page.wait_for_timeout(settings.get("wait_after_load", 3000))
+                    page.goto(url, wait_until="networkidle", timeout=45000)
 
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                page.wait_for_timeout(2000)
+                    wait_for = target.get("wait_for")
+                    wait_for_selector = target.get("wait_for_selector")
 
-                current_status = check_target(page, target)
+                    if wait_for:
+                        try:
+                            page.wait_for_selector(f"text={wait_for}", timeout=12000)
+                            print(f"  → 已等到文字「{wait_for}」")
+                        except Exception:
+                            print(f"  → 等待文字「{wait_for}」超時")
+                    elif wait_for_selector:
+                        try:
+                            page.wait_for_selector(wait_for_selector, timeout=12000)
+                            print(f"  → 已等到 selector")
+                        except Exception:
+                            print(f"  → 等待 selector 超時")
+                    else:
+                        page.wait_for_timeout(settings.get("wait_after_load", 3000))
+
+                    page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                    page.wait_for_timeout(2000)
+
+                    current_status = check_target(page, target)
 
             except Exception as e:
                 print(f"  → 載入失敗: {e}")
