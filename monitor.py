@@ -108,4 +108,56 @@ def main():
 
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                page
+                page.wait_for_timeout(3000)
+
+                # 嘗試向下滾動，觸發懶加載
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(2000)
+
+                current_status = check_target(page, target)
+                print(f"  → 判斷結果: {current_status}")
+
+            except Exception as e:
+                print(f"  → 載入頁面失敗: {e}")
+                current_status = "ERROR"
+
+            previous = state.get(tid, "LOST")
+            print(f"  → 上次狀態: {previous}")
+
+            if current_status in ("FOUND", "LOST") and current_status != previous:
+                state[tid] = current_status
+                changed = True
+
+                if current_status == "FOUND":
+                    msg = (
+                        f"<b>有貨通知！</b>\n\n"
+                        f"商品：<b>{name}</b>\n"
+                        f"狀態：FOUND\n"
+                        f"連結：{url}"
+                    )
+                    send_telegram(token, chat_id, msg)
+                    print(f"→ 已發送有貨通知")
+
+                elif current_status == "LOST":
+                    msg = (
+                        f"<b>已經冇貨</b>\n\n"
+                        f"商品：<b>{name}</b>\n"
+                        f"連結：{url}"
+                    )
+                    send_telegram(token, chat_id, msg)
+                    print(f"→ 已發送冇貨通知")
+
+        browser.close()
+
+    if changed:
+        save_state(state)
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write("changed=true\n")
+    else:
+        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            f.write("changed=false\n")
+
+    print("監控完成")
+
+if __name__ == "__main__":
+    main()
